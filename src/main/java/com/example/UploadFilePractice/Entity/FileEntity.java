@@ -24,6 +24,9 @@ public class FileEntity {
     @Column(length = 65555)
     private byte[] data;
 
+    @Column
+    private String diskLink;
+
     @Column(columnDefinition = "boolean default false")
     private boolean completed;
 

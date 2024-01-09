@@ -6,10 +6,7 @@ import com.example.UploadFilePractice.Entity.FileEntity;
 import com.example.UploadFilePractice.Service.FileService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestPart;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -31,7 +28,8 @@ public class FileController {
     public ResponseEntity<FileUploadStatusDTO> handleFileUploadChunk(@RequestPart("files") MultipartFile[] files,
                                                                      @RequestPart("fileName") String fileName,
                                                                      @RequestPart("chunkIndex") String chunkIndexStr,
-                                                                     @RequestPart("totalChunks") String totalChunksStr) {
+                                                                     @RequestPart("totalChunks") String totalChunksStr,
+                                                                     @RequestParam("sizeType") String sizeType) {
         log.info(chunkIndexStr);
 
         int chunkIndex = Integer.parseInt(chunkIndexStr);
@@ -45,7 +43,12 @@ public class FileController {
 
         try {
             for (MultipartFile file : files) {
-                fileService.saveFileChunk(file, fileName, chunkIndex, totalChunks);
+                if (sizeType.equals("big")) {
+                    fileService.saveFileChunkOnDisk(file, fileName, chunkIndex, totalChunks);
+                }
+                else {
+                    fileService.saveFileChunkOnDB(file, fileName, chunkIndex, totalChunks);
+                }
             }
             fileUploadStatusDTO.setSavedStatus(true);
             log.info("Save success!!! File: " + fileName + "; Chunk index: " + chunkIndex + "; Total chunks: " + totalChunks);

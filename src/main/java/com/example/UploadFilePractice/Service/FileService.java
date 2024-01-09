@@ -5,13 +5,22 @@ import com.example.UploadFilePractice.Repository.FileRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Optional;
 
 @Service
 public class FileService {
 
     private final FileRepository fileRepository;
+
+    private static final String diskAddress = "C:/Users/vtthinh/Desktop/file_destination/";
+
+    private int maxRetries = 3;
+    private int retryCount = 0;
 
 
     public FileService(FileRepository fileRepository) {
@@ -27,7 +36,7 @@ public class FileService {
         return result;
     }
 
-    public void saveFileChunk(MultipartFile file, String fileName, int chunkIndex, int totalChunks) throws IOException, RuntimeException {
+    public void saveFileChunkOnDB(MultipartFile file, String fileName, int chunkIndex, int totalChunks) throws IOException, RuntimeException {
 
         if (chunkIndex == 0) {
 
@@ -74,6 +83,77 @@ public class FileService {
                     throw new RuntimeException("Failed to save data");
 
                 }
+
+            }
+        }
+        else if (chunkIndex < 0 || chunkIndex > totalChunks - 1) {
+
+            throw new IOException("Invalid chunk index");
+
+        }
+
+    }
+
+
+     public void saveFileChunkOnDisk(MultipartFile file, String fileName, int chunkIndex, int totalChunks) throws IOException, RuntimeException, InterruptedException {
+
+        if (chunkIndex == 0) {
+
+            FileEntity fileEntity = new FileEntity();
+            fileEntity.setFileName(fileName);
+            fileEntity.setDiskLink(diskAddress+fileName);
+
+
+            try {
+
+                File dest = new File(diskAddress+fileName);
+                fileRepository.save(fileEntity);
+                file.transferTo(dest);
+
+            } catch (Exception e)
+            {
+
+                throw new RuntimeException("Failed to save data");
+
+            }
+
+
+        }
+        else if (chunkIndex > 0 && chunkIndex <= totalChunks - 1) {
+
+            Optional<FileEntity> fileEntity = fileRepository.findByFileName(fileName);
+
+            if (fileEntity.isPresent()){
+
+                while (retryCount < maxRetries) {
+                    try {
+                        Path path = Path.of(fileEntity.get().getDiskLink());
+                        Files.write(path, file.getBytes(), StandardOpenOption.APPEND);
+                        break;  // Successfully wrote to the file, exit the loop
+                    } catch (IOException e) {
+                        retryCount++;
+                        Thread.sleep(1000);  // Introduce a short delay before retrying
+                    }
+                }
+
+
+                if (chunkIndex == totalChunks - 1) {
+
+                   try {
+
+                        fileEntity.get().setCompleted(true);
+                        fileRepository.save(fileEntity.get());
+
+                    } catch (Exception e)
+                    {
+
+                        throw new RuntimeException("Failed to save data");
+
+                    }
+
+                }
+
+
 
             }
         }

@@ -4,6 +4,7 @@ package com.example.UploadFilePractice.Controller;
 import com.example.UploadFilePractice.DTO.FileUploadStatusDTO;
 import com.example.UploadFilePractice.Entity.FileEntity;
 import com.example.UploadFilePractice.Service.FileService;
+import jdk.jfr.ContentType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -44,7 +45,7 @@ public class FileController {
         try {
             for (MultipartFile file : files) {
                 if (sizeType.equals("big")) {
-                    fileService.saveFileChunkOnDisk(file, fileName, chunkIndex, totalChunks);
+                    fileService.saveFileChunkOnAzureBlob(file, fileName, chunkIndex, totalChunks);
                 }
                 else {
                     fileService.saveFileChunkOnDB(file, fileName, chunkIndex, totalChunks);

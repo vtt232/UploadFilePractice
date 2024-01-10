@@ -1,12 +1,21 @@
 package com.example.UploadFilePractice.Service;
 
+import com.azure.spring.cloud.core.resource.AzureStorageBlobProtocolResolver;
+import com.azure.storage.blob.BlobClient;
+import com.azure.storage.blob.BlobContainerClient;
+import com.azure.storage.blob.BlobServiceClient;
+import com.azure.storage.blob.specialized.AppendBlobClient;
 import com.example.UploadFilePractice.Entity.FileEntity;
 import com.example.UploadFilePractice.Repository.FileRepository;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -22,9 +31,19 @@ public class FileService {
     private int maxRetries = 3;
     private int retryCount = 0;
 
+    private final String containerName;
+    private final ResourceLoader resourceLoader;
+    private final AzureStorageBlobProtocolResolver azureStorageBlobProtocolResolver;
 
-    public FileService(FileRepository fileRepository) {
+    private BlobServiceClient blobServiceClient;
+
+
+    public FileService(FileRepository fileRepository, @Value("${spring.cloud.azure.storage.blob.container-name}") String containerName, ResourceLoader resourceLoader, AzureStorageBlobProtocolResolver azureStorageBlobProtocolResolver, BlobServiceClient blobServiceClient) {
         this.fileRepository = fileRepository;
+        this.containerName = containerName;
+        this.resourceLoader = resourceLoader;
+        this.azureStorageBlobProtocolResolver = azureStorageBlobProtocolResolver;
+        this.blobServiceClient = blobServiceClient;
     }
 
 
@@ -95,7 +114,7 @@ public class FileService {
     }
 
 
-     public void saveFileChunkOnDisk(MultipartFile file, String fileName, int chunkIndex, int totalChunks) throws IOException, RuntimeException, InterruptedException {
+    public void saveFileChunkOnDisk(MultipartFile file, String fileName, int chunkIndex, int totalChunks) throws IOException, RuntimeException, InterruptedException {
 
         if (chunkIndex == 0) {
 
@@ -140,6 +159,83 @@ public class FileService {
                 if (chunkIndex == totalChunks - 1) {
 
                    try {
+
+                        fileEntity.get().setCompleted(true);
+                        fileRepository.save(fileEntity.get());
+
+                    } catch (Exception e)
+                    {
+
+                        throw new RuntimeException("Failed to save data");
+
+                    }
+
+                }
+
+
+
+            }
+        }
+        else if (chunkIndex < 0 || chunkIndex > totalChunks - 1) {
+
+            throw new IOException("Invalid chunk index");
+
+        }
+
+    }
+
+    public void saveFileChunkOnAzureBlob(MultipartFile file, String fileName, int chunkIndex, int totalChunks) throws IOException, RuntimeException, InterruptedException {
+
+        BlobContainerClient containerClient = blobServiceClient.getBlobContainerClient(containerName);
+        AppendBlobClient blobClient = containerClient.getBlobClient(fileName).getAppendBlobClient();
+
+        if (chunkIndex == 0) {
+
+            FileEntity fileEntity = new FileEntity();
+            fileEntity.setFileName(fileName);
+            fileEntity.setDiskLink(diskAddress+fileName);
+
+
+            try {
+                byte[] inputData = file.getBytes();
+                ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(inputData);
+                blobClient.create();
+                blobClient.appendBlock(byteArrayInputStream, file.getSize());
+               // blobClient.(inputStream, file.getSize(), true);
+                fileRepository.save(fileEntity);
+
+            } catch (Exception e)
+            {
+
+                throw new RuntimeException("Failed to save data");
+
+            }
+
+
+        }
+        else if (chunkIndex > 0 && chunkIndex <= totalChunks - 1) {
+
+            Optional<FileEntity> fileEntity = fileRepository.findByFileName(fileName);
+
+            if (fileEntity.isPresent()){
+
+                while (retryCount < maxRetries) {
+                    try {
+                        byte[] inputData = file.getBytes();
+                        ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(inputData);
+                        //blobClient.upload(inputStream, file.getSize(), true);
+                        blobClient.appendBlock(byteArrayInputStream, file.getSize());
+                        break;  // Successfully wrote to the file, exit the loop
+                    } catch (IOException e) {
+                        retryCount++;
+                        Thread.sleep(1000);  // Introduce a short delay before retrying
+                    }
+                }
+
+
+                if (chunkIndex == totalChunks - 1) {
+
+                    try {
 
                         fileEntity.get().setCompleted(true);
                         fileRepository.save(fileEntity.get());

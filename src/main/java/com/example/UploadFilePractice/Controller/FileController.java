@@ -1,6 +1,7 @@
 package com.example.UploadFilePractice.Controller;
 
 
+import com.example.UploadFilePractice.DTO.FileDownloadChunkDTO;
 import com.example.UploadFilePractice.DTO.FileUploadStatusDTO;
 import com.example.UploadFilePractice.Entity.FileEntity;
 import com.example.UploadFilePractice.Service.FileService;
@@ -40,8 +41,6 @@ public class FileController {
         fileUploadStatusDTO.setFilename(fileName);
         fileUploadStatusDTO.setLatestChunkIndex(chunkIndex);
 
-
-
         try {
             for (MultipartFile file : files) {
                 if (sizeType.equals("big")) {
@@ -59,6 +58,24 @@ public class FileController {
             fileUploadStatusDTO.setSavedStatus(false);
             return ResponseEntity.status(500).body(fileUploadStatusDTO);
         }
+    }
+
+    @GetMapping("/download-chunk")
+    public ResponseEntity<FileDownloadChunkDTO> handleFileDownloadChunk(@RequestParam("fileName") String fileName, @RequestParam("chunkIndex") int chunkIndex) {
+
+        try {
+
+            FileDownloadChunkDTO fileDownloadChunkDTO = fileService.downloadFileFromAzureBlob(fileName, chunkIndex);
+
+            return ResponseEntity.status(200).body(fileDownloadChunkDTO);
+
+        } catch (Exception e) {
+
+            log.error(e.getMessage());
+            return ResponseEntity.status(500).body(null);
+
+        }
+
     }
 
 }

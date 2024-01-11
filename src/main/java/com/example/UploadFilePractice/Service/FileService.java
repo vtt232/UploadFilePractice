@@ -5,6 +5,7 @@ import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.specialized.AppendBlobClient;
+import com.example.UploadFilePractice.DTO.FileDownloadChunkDTO;
 import com.example.UploadFilePractice.Entity.FileEntity;
 import com.example.UploadFilePractice.Repository.FileRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -261,5 +262,10 @@ public class FileService {
 
     }
 
+    public FileDownloadChunkDTO downloadFileFromAzureBlob(String fileName, int chunkIndex) {
+
+        FileDownloadChunkDTO fileDownloadChunkDTO = new FileDownloadChunkDTO();
+        return fileDownloadChunkDTO;
+    }
 
 }

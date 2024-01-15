@@ -1,17 +1,20 @@
 package com.example.UploadFilePractice.Controller;
 
 
+import com.example.UploadFilePractice.DTO.FileDTO;
 import com.example.UploadFilePractice.DTO.FileDownloadChunkDTO;
 import com.example.UploadFilePractice.DTO.FileUploadStatusDTO;
 import com.example.UploadFilePractice.Entity.FileEntity;
 import com.example.UploadFilePractice.Service.FileService;
 import jdk.jfr.ContentType;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/files")
@@ -66,6 +69,7 @@ public class FileController {
         try {
 
             FileDownloadChunkDTO fileDownloadChunkDTO = fileService.downloadFileFromAzureBlob(fileName, chunkIndex);
+            log.info("Download: " + fileDownloadChunkDTO.getFileName() + " Index: " + String.valueOf(fileDownloadChunkDTO.getChunkIndex()));
 
             return ResponseEntity.status(200).body(fileDownloadChunkDTO);
 
@@ -77,5 +81,23 @@ public class FileController {
         }
 
     }
+
+    @GetMapping("/all")
+    @Cacheable(value = "file-search")
+    public List<FileDTO> getAllFilesFromDB() {
+
+        try {
+
+            return fileService.getAllFilesInDB();
+
+        } catch (Exception e) {
+
+            log.error(e.getMessage());
+            return null;
+
+        }
+
+    }
+
 
 }

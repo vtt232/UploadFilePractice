@@ -6,12 +6,18 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.ColumnDefault;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.data.redis.core.RedisHash;
+
+import java.io.Serializable;
 
 @Entity
 @NoArgsConstructor
 @AllArgsConstructor
 @Getter
 @Setter
+@Table(name = "file")
 public class FileEntity {
 
     @Id
@@ -29,5 +35,8 @@ public class FileEntity {
 
     @Column(columnDefinition = "boolean default false")
     private boolean completed;
+
+
+
 
 }

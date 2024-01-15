@@ -4,25 +4,34 @@ import com.azure.spring.cloud.core.resource.AzureStorageBlobProtocolResolver;
 import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
+import com.azure.storage.blob.models.BlobDownloadContentResponse;
+import com.azure.storage.blob.models.BlobDownloadResponse;
+import com.azure.storage.blob.models.BlobRange;
+import com.azure.storage.blob.models.DownloadRetryOptions;
 import com.azure.storage.blob.specialized.AppendBlobClient;
+import com.example.UploadFilePractice.DTO.FileDTO;
 import com.example.UploadFilePractice.DTO.FileDownloadChunkDTO;
 import com.example.UploadFilePractice.Entity.FileEntity;
+import com.example.UploadFilePractice.Mapper.FileMapper;
 import com.example.UploadFilePractice.Repository.FileRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.cache.annotation.Cacheable;
 
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class FileService {
 
     private final FileRepository fileRepository;
@@ -37,6 +46,9 @@ public class FileService {
     private final AzureStorageBlobProtocolResolver azureStorageBlobProtocolResolver;
 
     private BlobServiceClient blobServiceClient;
+
+
+    private final static int BUFFER_SIZE = 3 * 1024 * 1024;
 
 
     public FileService(FileRepository fileRepository, @Value("${spring.cloud.azure.storage.blob.container-name}") String containerName, ResourceLoader resourceLoader, AzureStorageBlobProtocolResolver azureStorageBlobProtocolResolver, BlobServiceClient blobServiceClient) {
@@ -63,6 +75,12 @@ public class FileService {
             FileEntity fileEntity = new FileEntity();
             fileEntity.setFileName(fileName);
             fileEntity.setData(file.getBytes());
+
+            if (totalChunks == 1) {
+
+                fileEntity.setCompleted(true);
+
+            }
 
             try {
 
@@ -264,8 +282,79 @@ public class FileService {
 
     public FileDownloadChunkDTO downloadFileFromAzureBlob(String fileName, int chunkIndex) {
 
-        FileDownloadChunkDTO fileDownloadChunkDTO = new FileDownloadChunkDTO();
-        return fileDownloadChunkDTO;
+        BlobContainerClient containerClient = blobServiceClient.getBlobContainerClient(containerName);
+
+        AppendBlobClient blobClient = containerClient.getBlobClient(fileName).getAppendBlobClient();
+
+        // Get the size of the blob
+        long blobSize = blobClient.getProperties().getBlobSize();
+        String blobType = blobClient.getProperties().getContentType();
+
+        try {
+
+
+            if ((long) chunkIndex * BUFFER_SIZE < blobSize) {
+
+
+                BlobRange blobRange = new BlobRange((long) chunkIndex * BUFFER_SIZE, (long) BUFFER_SIZE);
+                ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                DownloadRetryOptions options = new DownloadRetryOptions().setMaxRetryRequests(maxRetries);
+
+                blobClient.downloadStreamWithResponse(outputStream, blobRange, options, null, false, null, null);
+                byte[] downloadedBytes = outputStream.toByteArray();
+
+                FileDownloadChunkDTO fileDownloadChunkDTO = new FileDownloadChunkDTO();
+                fileDownloadChunkDTO.setFileName(fileName);
+                fileDownloadChunkDTO.setChunkIndex(chunkIndex);
+                fileDownloadChunkDTO.setData(downloadedBytes);
+                fileDownloadChunkDTO.setContentType(blobType);
+
+                return fileDownloadChunkDTO;
+
+            } else {
+
+                FileDownloadChunkDTO fileDownloadChunkDTO = new FileDownloadChunkDTO();
+                fileDownloadChunkDTO.setFileName(fileName);
+                fileDownloadChunkDTO.setChunkIndex(-1);
+                fileDownloadChunkDTO.setData(null);
+                fileDownloadChunkDTO.setContentType(blobType);
+
+                return fileDownloadChunkDTO;
+
+            }
+
+        } catch (Exception e) {
+
+            throw new RuntimeException(e);
+
+        }
+
+    }
+
+    public List<FileDTO> getAllFilesInDB() {
+
+        log.info("GET ALL FILES FROM DB");
+
+        List<FileEntity> fileEntities = fileRepository.findAllFiles();
+
+        if (!fileEntities.isEmpty()) {
+
+            log.info("GET ALL FILES FROM DB SUCCESSFULLY");
+
+            List<FileDTO> fileDTOS = new ArrayList<FileDTO>();
+
+            fileDTOS = fileEntities.stream().map(FileMapper::mapEntityToDTO).toList();
+
+            return fileDTOS;
+
+        } else {
+
+            log.info("GET ALL FILES FROM DB FAILED");
+
+            return null;
+
+        }
+
     }
 
 }

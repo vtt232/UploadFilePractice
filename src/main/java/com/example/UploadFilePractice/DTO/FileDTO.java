@@ -5,13 +5,16 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.io.Serializable;
+
 @NoArgsConstructor
 @AllArgsConstructor
 @Getter
 @Setter
-public class FileDownloadChunkDTO {
+public class FileDTO implements Serializable {
+
     String fileName;
-    int chunkIndex;
-    String contentType;
-    byte[] data;
+
+    long fileSize;
+
 }
